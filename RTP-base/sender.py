@@ -65,6 +65,49 @@ def sender(receiver_ip, receiver_port, window_size):
             ):
                 break
 
+        # Sender sliding window
+        base = 1
+        next_seq = 1
+        total_packets = len(data_packets)
+
+        while base <= total_packets:
+            # Gui cac goi tin khi cua so con cho
+            while (
+                next_seq <= total_packets
+                and next_seq < base + window_size
+            ):
+                packet = data_packets[next_seq - 1]
+                s.sendto(packet, (receiver_ip, receiver_port))
+                next_seq += 1
+
+            # Cho ACK tu receiver
+            try:
+                ack_data, address = s.recvfrom(2048)
+            except socket.timeout:
+                raise TimeoutError(
+                    "DATA ACK timeout: retransmission not implemented yet"
+                )
+
+            # Bo qua packet khong dung kich thuoc ACK
+            if len(ack_data) != 16:
+                continue
+
+            # Doc va kiem tra checksum cua ACK
+            ack_header = PacketHeader(ack_data)
+            received_checksum = ack_header.checksum
+            ack_header.checksum = 0
+
+            if compute_checksum(ack_header) != received_checksum:
+                continue
+
+            if ack_header.type != 3 or ack_header.length != 0:
+                continue
+
+            # Dich chuyen cua so khi nhan ACK moi
+            ack_num = ack_header.seq_num
+            if base < ack_num <= next_seq:
+                base = ack_num
+
         return data_packets
 
 def main():
