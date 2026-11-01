@@ -14,6 +14,8 @@ def receiver(receiver_ip, receiver_port, window_size):
         # Trang thai ket noi
         started = False
         sender_address = None
+        expected_seq = 1
+        buffered_packets = {}
 
         while True:
             packet, address = s.recvfrom(2048)
@@ -57,6 +59,22 @@ def receiver(receiver_ip, receiver_port, window_size):
                 continue
 
             if header.type == 0:
+                continue
+
+
+            # Xu ly goi DATA
+            if header.type == 2:
+                seq_num = header.seq_num
+
+                if seq_num < expected_seq:
+                    continue
+
+                if seq_num >= expected_seq + window_size:
+                    continue
+
+                if seq_num not in buffered_packets:
+                    buffered_packets[seq_num] = payload
+
                 continue
 
 def main():
