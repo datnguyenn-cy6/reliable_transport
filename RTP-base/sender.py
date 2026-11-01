@@ -6,12 +6,36 @@ from utils import PacketHeader, compute_checksum
 
 def sender(receiver_ip, receiver_port, window_size):
     """TODO: Open socket and send message from sys.stdin."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    pkt_header = PacketHeader(type=2, seq_num=10, length=14)
-    pkt_header.checksum = compute_checksum(pkt_header / "Hello, world!\n")
-    pkt = pkt_header / "Hello, world!\n"
-    s.sendto(bytes(pkt), (receiver_ip, receiver_port))
+    import sys
 
+    # Kich thuoc toi da cua goi RTP
+    MAX_PACKET_SIZE = 1472
+    HEADER_SIZE = 16
+    MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - HEADER_SIZE
+
+    message = sys.stdin.buffer.read()
+    data_packets = []
+
+    # Chia du lieu thanh cac chunks
+    for offset in range(0, len(message), MAX_PAYLOAD_SIZE):
+        chunk = message[offset:offset + MAX_PAYLOAD_SIZE]
+
+        seq_num = len(data_packets) + 1
+
+        # RTP header
+        header = PacketHeader(
+            type=2,
+            seq_num=seq_num,
+            length=len(chunk)
+        )
+
+        # Tinh checksum
+        header.checksum = compute_checksum(header / chunk)
+
+        packet = bytes(header / chunk)
+        data_packets.append(packet)
+
+    return data_packets
 
 def main():
     parser = argparse.ArgumentParser()
