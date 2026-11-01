@@ -136,7 +136,47 @@ def sender(receiver_ip, receiver_port, window_size):
                 else:
                     timer_start = None
 
-        return data_packets
+
+        # Tao goi END
+        end_seq = total_packets + 1
+        end_header = PacketHeader(type=1, seq_num=end_seq, length=0)
+
+        # Tinh checksum va gui goi END
+        end_header.checksum = compute_checksum(end_header)
+        s.sendto(bytes(end_header), (receiver_ip, receiver_port))
+
+        end_deadline = time.monotonic() + 0.5
+
+        while True:
+            remaining = end_deadline - time.monotonic()
+
+            if remaining <= 0:
+                break
+
+            s.settimeout(remaining)
+
+            try:
+                ack_data, address = s.recvfrom(2048)
+            except socket.timeout:
+                break
+
+            if len(ack_data) != 16:
+                continue
+
+            # Doc va kiem tra checksum cua ACK
+            ack_header = PacketHeader(ack_data)
+            saved_checksum = ack_header.checksum
+            ack_header.checksum = 0
+
+            if compute_checksum(ack_header) != saved_checksum:
+                continue
+
+            if (
+                ack_header.type == 3
+                and ack_header.length == 0
+                and ack_header.seq_num == end_seq + 1
+            ):
+                break
 
 def main():
     parser = argparse.ArgumentParser()
