@@ -35,7 +35,37 @@ def sender(receiver_ip, receiver_port, window_size):
         packet = bytes(header / chunk)
         data_packets.append(packet)
 
-    return data_packets
+    # Tao socket UDP de truyen goi tin
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+
+        start_header = PacketHeader(type=0, seq_num=0, length=0)
+        start_header.checksum = compute_checksum(start_header)
+        s.sendto(bytes(start_header), (receiver_ip, receiver_port))
+
+        s.settimeout(3.0)
+
+        # Cho ACK hop le cho goi START
+        while True:
+            ack_data, address = s.recvfrom(2048)
+
+            if len(ack_data) != 16:
+                continue
+
+            ack_header = PacketHeader(ack_data)
+            received_checksum = ack_header.checksum
+
+            ack_header.checksum = 0
+            if compute_checksum(ack_header) != received_checksum:
+                continue
+
+            if (
+                ack_header.type == 3
+                and ack_header.seq_num == 1
+                and ack_header.length == 0
+            ):
+                break
+
+        return data_packets
 
 def main():
     parser = argparse.ArgumentParser()
