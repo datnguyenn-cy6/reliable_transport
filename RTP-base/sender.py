@@ -65,12 +65,19 @@ def sender(receiver_ip, receiver_port, window_size):
             ):
                 break
 
+        import time
+
+        if window_size < 1:
+            raise ValueError("window_size must be positive")
+
         # Sender sliding window
         base = 1
         next_seq = 1
         total_packets = len(data_packets)
+        timer_start = None
 
         while base <= total_packets:
+            sent_new = False
             # Gui cac goi tin khi cua so con cho
             while (
                 next_seq <= total_packets
@@ -79,14 +86,31 @@ def sender(receiver_ip, receiver_port, window_size):
                 packet = data_packets[next_seq - 1]
                 s.sendto(packet, (receiver_ip, receiver_port))
                 next_seq += 1
+                sent_new = True
+
+            if sent_new and timer_start is None:
+                timer_start = time.monotonic()
+
+            remaining = 0.5 - (time.monotonic() - timer_start)
+
+            # Truyen lai cac DATA chua duoc ACK khi het 500 ms
+            if remaining <= 0:
+                for seq in range(base, next_seq):
+                    s.sendto(
+                        data_packets[seq - 1],
+                        (receiver_ip, receiver_port)
+                    )
+
+                timer_start = time.monotonic()
+                continue
+
+            s.settimeout(remaining)
 
             # Cho ACK tu receiver
             try:
                 ack_data, address = s.recvfrom(2048)
             except socket.timeout:
-                raise TimeoutError(
-                    "DATA ACK timeout: retransmission not implemented yet"
-                )
+                continue
 
             # Bo qua packet khong dung kich thuoc ACK
             if len(ack_data) != 16:
@@ -107,6 +131,10 @@ def sender(receiver_ip, receiver_port, window_size):
             ack_num = ack_header.seq_num
             if base < ack_num <= next_seq:
                 base = ack_num
+                if base < next_seq:
+                    timer_start = time.monotonic()
+                else:
+                    timer_start = None
 
         return data_packets
 
