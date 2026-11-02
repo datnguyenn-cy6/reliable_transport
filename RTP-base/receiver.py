@@ -6,6 +6,7 @@ from utils import PacketHeader, compute_checksum
 
 def receiver(receiver_ip, receiver_port, window_size):
     """TODO: Listen on socket and print received message to sys.stdout."""
+    import sys
 
     # Tao socket UDP va lang nghe tren dia chi duoc chi dinh
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -61,7 +62,6 @@ def receiver(receiver_ip, receiver_port, window_size):
             if header.type == 0:
                 continue
 
-
             # Xu ly goi DATA
             if header.type == 2:
                 seq_num = header.seq_num
@@ -74,6 +74,20 @@ def receiver(receiver_ip, receiver_port, window_size):
 
                 if seq_num not in buffered_packets:
                     buffered_packets[seq_num] = payload
+
+                delivered = False
+
+                while expected_seq in buffered_packets:
+                    ordered_payload = buffered_packets.pop(expected_seq)
+
+                    sys.stdout.buffer.write(ordered_payload)
+
+                    expected_seq += 1
+                    delivered = True
+
+                # Day du lieu ra stdout ngay sau khi xu ly
+                if delivered:
+                    sys.stdout.buffer.flush()
 
                 continue
 
