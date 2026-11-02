@@ -66,14 +66,12 @@ def receiver(receiver_ip, receiver_port, window_size):
             if header.type == 2:
                 seq_num = header.seq_num
 
-                if seq_num < expected_seq:
-                    continue
-
-                if seq_num >= expected_seq + window_size:
-                    continue
-
-                if seq_num not in buffered_packets:
-                    buffered_packets[seq_num] = payload
+                if (
+                    expected_seq <= seq_num
+                    and seq_num < expected_seq + window_size
+                ):
+                    if seq_num not in buffered_packets:
+                        buffered_packets[seq_num] = payload
 
                 delivered = False
 
@@ -88,6 +86,15 @@ def receiver(receiver_ip, receiver_port, window_size):
                 # Day du lieu ra stdout ngay sau khi xu ly
                 if delivered:
                     sys.stdout.buffer.flush()
+
+                ack_header = PacketHeader(
+                    type=3,
+                    seq_num=expected_seq,
+                    length=0
+                )
+
+                ack_header.checksum = compute_checksum(ack_header)
+                s.sendto(bytes(ack_header), sender_address)
 
                 continue
 
