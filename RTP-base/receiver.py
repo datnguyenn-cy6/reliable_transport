@@ -98,6 +98,27 @@ def receiver(receiver_ip, receiver_port, window_size):
 
                 continue
 
+            # Xu ly goi END khi tat ca DATA da duoc nhan
+            if header.type == 1:
+
+                if header.seq_num != expected_seq or header.length != 0:
+                    continue
+
+                # Tao ACK cho END
+                end_ack = PacketHeader(
+                    type=3,
+                    seq_num=expected_seq + 1,
+                    length=0
+                )
+
+                # Tinh checksum CRC32 cho ACK
+                end_ack.checksum = compute_checksum(end_ack)
+
+                sys.stdout.buffer.flush()
+                s.sendto(bytes(end_ack), sender_address)
+
+                break
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
