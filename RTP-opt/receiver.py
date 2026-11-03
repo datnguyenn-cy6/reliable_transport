@@ -67,6 +67,12 @@ def receiver(receiver_ip, receiver_port, window_size):
                 seq_num = header.seq_num
 
                 if (
+                    seq_num < expected_seq - window_size
+                    or seq_num >= expected_seq + window_size
+                ):
+                    continue
+
+                if (
                     expected_seq <= seq_num
                     and seq_num < expected_seq + window_size
                 ):
@@ -89,7 +95,7 @@ def receiver(receiver_ip, receiver_port, window_size):
 
                 ack_header = PacketHeader(
                     type=3,
-                    seq_num=expected_seq,
+                    seq_num=seq_num,
                     length=0
                 )
 
