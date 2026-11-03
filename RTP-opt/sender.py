@@ -75,6 +75,7 @@ def sender(receiver_ip, receiver_port, window_size):
         next_seq = 1
         total_packets = len(data_packets)
         timer_start = None
+        acked_packets = set()
 
         while base <= total_packets:
             sent_new = False
@@ -127,14 +128,22 @@ def sender(receiver_ip, receiver_port, window_size):
             if ack_header.type != 3 or ack_header.length != 0:
                 continue
 
-            # Dich chuyen cua so khi nhan ACK moi
+            # Xu ly ACK rieng cho tung DATA
             ack_num = ack_header.seq_num
-            if base < ack_num <= next_seq:
-                base = ack_num
-                if base < next_seq:
-                    timer_start = time.monotonic()
-                else:
-                    timer_start = None
+
+            if base <= ack_num < next_seq and ack_num <= total_packets:
+                acked_packets.add(ack_num)
+                old_base = base
+
+                while base in acked_packets:
+                    acked_packets.remove(base)
+                    base += 1
+
+                if base > old_base:
+                    if base < next_seq:
+                        timer_start = time.monotonic()
+                    else:
+                        timer_start = None
 
 
         # Tao goi END
