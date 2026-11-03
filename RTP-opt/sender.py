@@ -97,10 +97,11 @@ def sender(receiver_ip, receiver_port, window_size):
             # Truyen lai cac DATA chua duoc ACK khi het 500 ms
             if remaining <= 0:
                 for seq in range(base, next_seq):
-                    s.sendto(
-                        data_packets[seq - 1],
-                        (receiver_ip, receiver_port)
-                    )
+                    if seq not in acked_packets:
+                        s.sendto(
+                            data_packets[seq - 1],
+                            (receiver_ip, receiver_port)
+                        )
 
                 timer_start = time.monotonic()
                 continue
