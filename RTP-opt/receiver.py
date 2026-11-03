@@ -6,24 +6,118 @@ from utils import PacketHeader, compute_checksum
 
 def receiver(receiver_ip, receiver_port, window_size):
     """TODO: Listen on socket and print received message to sys.stdout."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((receiver_ip, receiver_port))
-    while True:
-        # Receive packet; address includes both IP and port
-        pkt, address = s.recvfrom(2048)
+    import sys
 
-        # Extract header and payload
-        pkt_header = PacketHeader(pkt[:16])
-        msg = pkt[16 : 16 + pkt_header.length]
+    # Tao socket UDP va lang nghe tren dia chi duoc chi dinh
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.bind((receiver_ip, receiver_port))
 
-        # Verity checksum
-        pkt_checksum = pkt_header.checksum
-        pkt_header.checksum = 0
-        computed_checksum = compute_checksum(pkt_header / msg)
-        if pkt_checksum != computed_checksum:
-            print("checksums not match")
-        print(msg)
+        # Trang thai ket noi
+        started = False
+        sender_address = None
+        expected_seq = 1
+        buffered_packets = {}
 
+        while True:
+            packet, address = s.recvfrom(2048)
+
+            if not 16 <= len(packet) <= 1472:
+                continue
+
+            # Tach header va payload
+            header = PacketHeader(packet[:16])
+            payload = packet[16:]
+
+            if header.length != len(payload):
+                continue
+
+            # Kiem tra checksum
+            saved_checksum = header.checksum
+            header.checksum = 0
+
+            if compute_checksum(header / payload) != saved_checksum:
+                continue
+
+            # Xu ly START khi chua co ket noi
+            if not started:
+                if (
+                    header.type != 0
+                    or header.seq_num != 0
+                    or header.length != 0
+                ):
+                    continue
+
+                started = True
+                sender_address = address
+
+                ack = PacketHeader(type=3, seq_num=1, length=0)
+                ack.checksum = compute_checksum(ack)
+
+                s.sendto(bytes(ack), sender_address)
+                continue
+
+            if address != sender_address:
+                continue
+
+            if header.type == 0:
+                continue
+
+            # Xu ly goi DATA
+            if header.type == 2:
+                seq_num = header.seq_num
+
+                if (
+                    expected_seq <= seq_num
+                    and seq_num < expected_seq + window_size
+                ):
+                    if seq_num not in buffered_packets:
+                        buffered_packets[seq_num] = payload
+
+                delivered = False
+
+                while expected_seq in buffered_packets:
+                    ordered_payload = buffered_packets.pop(expected_seq)
+
+                    sys.stdout.buffer.write(ordered_payload)
+
+                    expected_seq += 1
+                    delivered = True
+
+                # Day du lieu ra stdout ngay sau khi xu ly
+                if delivered:
+                    sys.stdout.buffer.flush()
+
+                ack_header = PacketHeader(
+                    type=3,
+                    seq_num=expected_seq,
+                    length=0
+                )
+
+                ack_header.checksum = compute_checksum(ack_header)
+                s.sendto(bytes(ack_header), sender_address)
+
+                continue
+
+            # Xu ly goi END khi tat ca DATA da duoc nhan
+            if header.type == 1:
+
+                if header.seq_num != expected_seq or header.length != 0:
+                    continue
+
+                # Tao ACK cho END
+                end_ack = PacketHeader(
+                    type=3,
+                    seq_num=expected_seq + 1,
+                    length=0
+                )
+
+                # Tinh checksum CRC32 cho ACK
+                end_ack.checksum = compute_checksum(end_ack)
+
+                sys.stdout.buffer.flush()
+                s.sendto(bytes(end_ack), sender_address)
+
+                break
 
 def main():
     parser = argparse.ArgumentParser()
